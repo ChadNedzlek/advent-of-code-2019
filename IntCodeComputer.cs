@@ -8,205 +8,251 @@ namespace Advent2019
 {
     public class IntCodeComputer
     {
-        private string _debugPrefix;
-        public ImmutableArray<int> Source { get; }
-        public bool Debug { get; set; }
+        private readonly string _debugPrefix;
 
-        public IntCodeComputer(IEnumerable<int> source)
+        public IntCodeComputer(IEnumerable<long> source)
             : this(source.ToImmutableArray())
         {
         }
 
-        public IntCodeComputer(ImmutableArray<int> source)
+        public IntCodeComputer(ImmutableArray<long> source)
         {
             Source = source;
         }
 
-        public IntCodeComputer(ImmutableArray<int> source, string debugPrefix)
+        public IntCodeComputer(ImmutableArray<long> source, string debugPrefix)
         {
             _debugPrefix = debugPrefix;
             Source = source;
             Debug = true;
         }
 
-        public IntCodeComputer CreateDebugger(string prefix)
+        public ImmutableArray<long> Source { get; }
+        public bool Debug { get; set; }
+
+        public IntCodeComputer CreateDebugger(string prefix = "")
         {
             return new IntCodeComputer(Source, prefix);
         }
 
-        public Queue<int> RunProgram(params int[] input)
+        public Queue<long> RunProgram(params long[] input)
         {
-            Queue<int> q = new Queue<int>();
-            foreach (int i in input)
+            var q = new Queue<long>();
+            foreach (long i in input)
             {
                 q.Enqueue(i);
             }
+
             return RunProgram(q);
         }
 
-        public Queue<int> RunProgram(Queue<int> input)
+        public Queue<long> RunProgram(Queue<long> input)
         {
             return RunProgram(input, out _);
         }
 
-        public async Task<int[]> RunProgramAsync(ChannelReader<int> input, ChannelWriter<int> output)
+        public async Task<long[]> RunProgramAsync(ChannelReader<long> input, ChannelWriter<long> output)
         {
-            var mem = new int[Source.Length];
+            var mem = new long[Source.Length];
+
+            // Store "high memory", memory that is outside the original program, which is just a sparse map
+            Dictionary<long, int> highMemMap = new Dictionary<long, int>();
+            long[] highMem = new long[0];
+
             Source.CopyTo(mem);
             int ip = 0;
+            int relativeBase = 0;
 
             while (true)
             {
-                int ins = mem[ip];
-                int opCode = ins % 100;
-                int[] modes = { (ins / 100 % 10), (ins / 1000 % 10), (ins / 10000 % 10) };
+                long ins = mem[ip];
+                long opCode = ins % 100;
+                int[] modes = {(int) (ins / 100 % 10), (int) (ins / 1000 % 10), (int) (ins / 10000 % 10)};
 
-                ref int Access(int param)
+                ref long Mem(long address)
                 {
+                    if (address < 0)
+                        throw new AccessViolationException($"Memory at {address} invalid");
+
+                    if (address < mem.Length)
+                        return ref mem[address];
+
+                    if (highMemMap.Count + 1 >= highMem.Length)
+                    {
+                        // We need more "high memory", 10 or double it, whichever is more
+                        Array.Resize(ref highMem, Math.Max(10, highMem.Length * 2));
+                    }
+
+                    if (!highMemMap.TryGetValue(address, out var mappedAddress))
+                    {
+                        highMemMap.Add(address, mappedAddress = highMemMap.Count);
+                    }
+
+                    return ref highMem[mappedAddress];
+                }
+
+                ref long ParameterValue(int param)
+                {
+                    ref long paramValue = ref Mem(ip + param);
                     switch (modes[param - 1])
                     {
                         case 0:
-                            {
-                                int value = mem[ip + param];
-                                ref int ret = ref mem[value];
-                                DebugOutput($"(mem[{ip + param}] = {value}] = {ret}) ");
-                                return ref ret;
-                            }
+                        {
+                            DebugOutput($"(mem[mem[{ip + param}] = {paramValue}] = ");
+                            ref long ret = ref Mem(paramValue);
+                            DebugOutput($"{ret}) ");
+                            return ref ret;
+                        }
                         case 1:
-                            {
-                                ref int ret = ref mem[ip + param];
-                                DebugOutput($"(mem[{ip + param}] = {ret}) ");
-                                return ref mem[ip + param];
-                            }
+                        {
+                            DebugOutput($"(mem[{ip + param}] = {paramValue})");
+                            return ref paramValue;
+                        }
+                        case 2:
+                        {
+                            DebugOutput($"(mem[rel {relativeBase} + {paramValue}] = ");
+                            ref long ret = ref Mem(relativeBase + paramValue);
+                            DebugOutput($"{ret}) ");
+                            return ref ret;
+                        }
                         default:
                             throw new NotSupportedException($"Unsupported parameter mode: {modes[param]}");
                     }
                 }
 
-                DebugOutput($"\n{_debugPrefix} op[mem[{ip}] = {opCode} in mode {string.Join(",", modes)}\n{_debugPrefix}  ");
+                DebugOutput(
+                    $"\n{_debugPrefix} op mem[{ip}] = {opCode} in mode {string.Join(",", modes)}\n{_debugPrefix}  "
+                );
 
                 switch (opCode)
                 {
                     case 1:
-                        {
-                            int a = Access(1);
-                            DebugOutput("+ ");
-                            int b = Access(2);
-                            int res = a + b;
-                            DebugOutput($"== {res} => ");
-                            Access(3) = res;
-                            ip += 4;
-                            break;
-                        }
+                    {
+                        long a = ParameterValue(1);
+                        DebugOutput($"+ ");
+                        long b = ParameterValue(2);
+                        long res = a + b;
+                        DebugOutput($"== {res} => ");
+                        ParameterValue(3) = res;
+                        ip += 4;
+                        break;
+                    }
                     case 2:
-                        {
-                            int a = Access(1);
-                            DebugOutput("* ");
-                            int b = Access(2);
-                            DebugOutput("=> ");
-                            int res = a * b;
-                            DebugOutput($"== {res} => ");
-                            Access(3) = res;
-                            ip += 4;
-                            break;
-                        }
+                    {
+                        long a = ParameterValue(1);
+                        DebugOutput($"* ");
+                        long b = ParameterValue(2);
+                        DebugOutput($"=> ");
+                        long res = a * b;
+                        DebugOutput($"== {res} => ");
+                        ParameterValue(3) = res;
+                        ip += 4;
+                        break;
+                    }
                     case 3:
+                    {
+                        if (input.TryRead(out long i))
                         {
-                            if (input.TryRead(out var i))
-                            {
-                                DebugOutput($"input == {i} => ");
-
-                            }
-                            else
-                            {
-                                DebugOutput($"input pending...\r");
-                                i = await input.ReadAsync();
-                                DebugOutput($"{_debugPrefix}    ... input == {i} => ");
-                            }
-
-                            Access(1) = i;
-                            ip += 2;
-                            break;
+                            DebugOutput($"input == {i} => ");
                         }
+                        else
+                        {
+                            DebugOutput($"input pending...\r");
+                            i = await input.ReadAsync();
+                            DebugOutput($"{_debugPrefix}    ... input == {i} => ");
+                        }
+
+                        ParameterValue(1) = i;
+                        ip += 2;
+                        break;
+                    }
                     case 4:
+                    {
+                        long o = ParameterValue(1);
+                        DebugOutput($" == {o} => output");
+                        if (output.TryWrite(o))
                         {
-                            int o = Access(1);
-                            DebugOutput($" == {o} => output");
-                            if (output.TryWrite(o))
-                            {
-                            }
-                            else
-                            {
-                                DebugOutput(" pending...");
-                                await output.WriteAsync(o);
-                                DebugOutput($"{_debugPrefix}    ... output");
-                            }
-
-                            ip += 2;
-                            break;
                         }
+                        else
+                        {
+                            DebugOutput($" pending...");
+                            await output.WriteAsync(o);
+                            DebugOutput($"{_debugPrefix}    ... output");
+                        }
+
+                        ip += 2;
+                        break;
+                    }
                     case 5:
+                    {
+                        DebugOutput($"if ");
+                        long p = ParameterValue(1);
+                        DebugOutput($" jmp ");
+                        long a = ParameterValue(2);
+                        if (p == 1)
                         {
-                            DebugOutput("if ");
-                            int p = Access(1);
-                            DebugOutput(" jmp ");
-                            int a = Access(2);
-                            if (p == 1)
-                            {
-                                ip = a;
-                                DebugOutput(" jumped");
-                            }
-                            else
-                            {
-                                ip += 3;
-                                DebugOutput(" skipped");
-                            }
-
-                            break;
+                            ip = (int) a;
+                            DebugOutput($" jumped");
                         }
+                        else
+                        {
+                            ip += 3;
+                            DebugOutput($" skipped");
+                        }
+
+                        break;
+                    }
                     case 6:
+                    {
+                        DebugOutput($"if not ");
+                        long p = ParameterValue(1);
+                        DebugOutput($" jmp ");
+                        long a = ParameterValue(2);
+                        if (p == 0)
                         {
-                            DebugOutput("if not ");
-                            int p = Access(1);
-                            DebugOutput(" jmp ");
-                            int a = Access(2);
-                            if (p == 0)
-                            {
-                                ip = a;
-                                DebugOutput(" jumped");
-                            }
-                            else
-                            {
-                                ip += 3;
-                                DebugOutput(" skipped");
-                            }
+                            ip = (int) a;
+                            DebugOutput($" jumped");
+                        }
+                        else
+                        {
+                            ip += 3;
+                            DebugOutput($" skipped");
+                        }
 
-                            break;
-                        }
+                        break;
+                    }
                     case 7:
-                        {
-                            int a = Access(1);
-                            DebugOutput("< ");
-                            int b = Access(2);
-                            int res = a < b ? 1 : 0;
-                            DebugOutput($" == {res} => ");
-                            Access(3) = res;
-                            ip += 4;
-                            break;
-                        }
+                    {
+                        long a = ParameterValue(1);
+                        DebugOutput($"< ");
+                        long b = ParameterValue(2);
+                        int res = a < b ? 1 : 0;
+                        DebugOutput($" == {res} => ");
+                        ParameterValue(3) = res;
+                        ip += 4;
+                        break;
+                    }
                     case 8:
-                        {
-                            int a = Access(1);
-                            DebugOutput("== ");
-                            int b = Access(2);
-                            int res = a == b ? 1 : 0;
-                            DebugOutput($" == {res} => ");
-                            Access(3) = res;
-                            ip += 4;
-                            break;
-                        }
+                    {
+                        long a = ParameterValue(1);
+                        DebugOutput($"== ");
+                        long b = ParameterValue(2);
+                        int res = a == b ? 1 : 0;
+                        DebugOutput($" == {res} => ");
+                        ParameterValue(3) = res;
+                        ip += 4;
+                        break;
+                    }
+                    case 9:
+                    {
+                        long a = ParameterValue(1);
+                        relativeBase += (int)a;
+                        DebugOutput($" ==> rel base {relativeBase}");
+                        ip += 2;
+                        break;
+                    }
                     case 99:
-                        DebugOutput("HALT\n");
+                        DebugOutput($"HALT\n");
                         output.Complete();
                         return mem;
                     default:
@@ -215,31 +261,31 @@ namespace Advent2019
             }
         }
 
-        public Queue<int> RunProgram(Queue<int> input, out int[] memory)
+        public Queue<long> RunProgram(Queue<long> input, out long[] memory)
         {
-            Channel<int> i = Channel.CreateBounded<int>(input.Count);
-            while (input.TryDequeue(out int v))
+            Channel<long> i = Channel.CreateBounded<long>(input.Count);
+            while (input.TryDequeue(out long v))
+            {
                 i.Writer.WriteAsync(v).GetAwaiter().GetResult();
-            Channel<int> o = Channel.CreateUnbounded<int>();
+            }
+
+            var o = Channel.CreateUnbounded<long>();
             memory = RunProgramAsync(i.Reader, o.Writer).GetAwaiter().GetResult();
-            Queue<int> result = new Queue<int>();
-            while (o.Reader.TryRead(out int v))
+            var result = new Queue<long>();
+            while (o.Reader.TryRead(out long v))
+            {
                 result.Enqueue(v);
+            }
+
             return result;
         }
 
         private void DebugOutput(FormattableString msg)
         {
             if (!Debug)
+            {
                 return;
-
-            Console.Write(msg);
-        }
-
-        private void DebugOutput(string msg)
-        {
-            if (!Debug)
-                return;
+            }
 
             Console.Write(msg);
         }

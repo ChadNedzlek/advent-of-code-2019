@@ -10,15 +10,15 @@ namespace AdventOfCode.Solutions
 {
     public class Day7
     {
-        private static async Task Problem1()
+        public static async Task Problem1()
         {
             var data = await Data.GetDataLines();
-            IntCodeComputer computer = new IntCodeComputer(data[0].Split(',').Select(int.Parse));
+            IntCodeComputer computer = new IntCodeComputer(data[0].Split(',').Select(long.Parse));
             long max = 0;
             int[] maxPermutation = null;
             foreach (var p in Permutations(new[] {0, 1, 2, 3, 4}))
             {
-                int signal = 0;
+                long signal = 0;
                 for (int iEngine = 0; iEngine < p.Length; iEngine++)
                 {
                     int phaseSetting = p[iEngine];
@@ -40,26 +40,26 @@ namespace AdventOfCode.Solutions
             Console.WriteLine($"Best sequence {string.Join(", ", maxPermutation)} is {max}");
         }
 
-        private static async Task Problem2()
+        public static async Task Problem2()
         {
             var data = await Data.GetDataLines();
-            IntCodeComputer computer = new IntCodeComputer(data[0].Split(',').Select(int.Parse));
+            IntCodeComputer computer = new IntCodeComputer(data[0].Split(',').Select(long.Parse));
             bool debug = false;
             long max = 0;
             int[] maxPermutation = null;
             foreach (var p in Permutations(new[] {5, 6, 7, 8, 9}))
             {
-                var ioPipelines = Enumerable.Repeat(0, 5).Select(_ => Channel.CreateBounded<int>(1)).ToArray();
+                var ioPipelines = Enumerable.Repeat(0, 5).Select(_ => Channel.CreateBounded<long>(1)).ToArray();
                 Task[] engines = p.Select(
                         async (phase, index) =>
                         {
                             // Engine 1 pulls input from pipeline 1
-                            Channel<int> engineChannel = ioPipelines[index];
+                            Channel<long> engineChannel = ioPipelines[index];
                             // Write the initial phase to the input pipeline
                             await engineChannel.Writer.WriteAsync(phase);
                             // Engine 1 pushes its output into engine 2 (and loops around)
                             int iNext = (index + 1) % p.Length;
-                            Channel<int> nextEngineChannel = ioPipelines[iNext];
+                            Channel<long> nextEngineChannel = ioPipelines[iNext];
 
                             if (debug)
                                 computer = computer.CreateDebugger(((char)(index + 'A')).ToString());
@@ -78,7 +78,7 @@ namespace AdventOfCode.Solutions
 
                 // When all the engines have halted, we need to find the output from the last engine
                 // (which is the first engines input)
-                int signal = await ioPipelines[0].Reader.ReadAsync();
+                long signal = await ioPipelines[0].Reader.ReadAsync();
 
                 if (maxPermutation == null || signal > max)
                 {
