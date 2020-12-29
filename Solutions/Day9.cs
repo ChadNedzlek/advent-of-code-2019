@@ -1,11 +1,10 @@
 ﻿using System;
 using System.Linq;
 using System.Threading.Tasks;
-using Advent2019;
 
 namespace AdventOfCode.Solutions
 {
-    public class Day9
+    public class SkipDay9
     {
         public static async Task Problem1()
         {

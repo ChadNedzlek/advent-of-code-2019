@@ -1,10 +1,8 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text.RegularExpressions;
 using System.Threading.Channels;
 using System.Threading.Tasks;
-using Advent2019;
 
 namespace AdventOfCode.Solutions
 {
@@ -27,13 +25,8 @@ namespace AdventOfCode.Solutions
 
                 if (maxPermutation == null || signal > max)
                 {
-                    Console.WriteLine($"Found new best sequence {string.Join(", ", p)} at {max}");
                     max = signal;
                     maxPermutation = p;
-                }
-                else
-                {
-                    Console.WriteLine($"DISCARDING sequence {string.Join(", ", p)} at {signal}");
                 }
             }
 
@@ -82,13 +75,8 @@ namespace AdventOfCode.Solutions
 
                 if (maxPermutation == null || signal > max)
                 {
-                    Console.WriteLine($"Found new best sequence {string.Join(", ", p)} at {max}");
                     max = signal;
                     maxPermutation = p;
-                }
-                else
-                {
-                    Console.WriteLine($"DISCARDING sequence {string.Join(", ", p)} at {signal}");
                 }
             }
 

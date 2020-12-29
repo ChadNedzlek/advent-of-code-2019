@@ -4,7 +4,7 @@ using System.Collections.Immutable;
 using System.Threading.Channels;
 using System.Threading.Tasks;
 
-namespace Advent2019
+namespace AdventOfCode
 {
     public class IntCodeComputer
     {
@@ -49,6 +49,11 @@ namespace Advent2019
         public Queue<long> RunProgram(Queue<long> input)
         {
             return RunProgram(input, out _);
+        }
+
+        public Queue<long> RunProgram(out long[] memory)
+        {
+            return RunProgram(new Queue<long>(), out memory);
         }
 
         public async Task<long[]> RunProgramAsync(ChannelReader<long> input, ChannelWriter<long> output)
@@ -189,15 +194,15 @@ namespace Advent2019
                         long p = ParameterValue(1);
                         DebugOutput($" jmp ");
                         long a = ParameterValue(2);
-                        if (p == 1)
+                        if (p != 0)
                         {
                             ip = (int) a;
-                            DebugOutput($" jumped");
+                            DebugOutput($" ==> jumped");
                         }
                         else
                         {
                             ip += 3;
-                            DebugOutput($" skipped");
+                            DebugOutput($" ==> skipped");
                         }
 
                         break;
@@ -211,12 +216,12 @@ namespace Advent2019
                         if (p == 0)
                         {
                             ip = (int) a;
-                            DebugOutput($" jumped");
+                            DebugOutput($" ==> jumped");
                         }
                         else
                         {
                             ip += 3;
-                            DebugOutput($" skipped");
+                            DebugOutput($" ==> skipped");
                         }
 
                         break;
@@ -263,11 +268,12 @@ namespace Advent2019
 
         public Queue<long> RunProgram(Queue<long> input, out long[] memory)
         {
-            Channel<long> i = Channel.CreateBounded<long>(input.Count);
+            Channel<long> i = Channel.CreateBounded<long>(Math.Max(input.Count, 1));
             while (input.TryDequeue(out long v))
             {
                 i.Writer.WriteAsync(v).GetAwaiter().GetResult();
             }
+            i.Writer.Complete();
 
             var o = Channel.CreateUnbounded<long>();
             memory = RunProgramAsync(i.Reader, o.Writer).GetAwaiter().GetResult();
