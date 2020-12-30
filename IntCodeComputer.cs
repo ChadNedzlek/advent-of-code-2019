@@ -56,6 +56,16 @@ namespace AdventOfCode
             return RunProgram(new Queue<long>(), out memory);
         }
 
+        public Task<long[]> RunProgramAsync(out ChannelWriter<long> input, out ChannelReader<long> output)
+        {
+            var i = Channel.CreateBounded<long>(1);
+            var o = Channel.CreateBounded<long>(2);
+            var t = RunProgramAsync(i.Reader, o.Writer);
+            input = i.Writer;
+            output = o.Reader;
+            return t;
+        }
+
         public async Task<long[]> RunProgramAsync(ChannelReader<long> input, ChannelWriter<long> output)
         {
             var mem = new long[Source.Length];
