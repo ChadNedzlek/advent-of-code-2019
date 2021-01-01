@@ -9,12 +9,12 @@ namespace AdventOfCode.Solutions
         public static async Task Problem1()
         {
             var data = await Data.GetDataLines();
-            List<List<((int x, int y) start, (int x, int y) end)>> segments =
-                new List<List<((int x, int y) start, (int x, int y) end)>>();
+            List<List<(IntCo2 start, IntCo2 end)>> segments =
+                new List<List<(IntCo2 start, IntCo2 end)>>();
             foreach (string line in data)
             {
-                List<((int x, int y) start, (int x, int y) end)> wire =
-                    new List<((int x, int y) start, (int x, int y) end)>();
+                List<(IntCo2 start, IntCo2 end)> wire =
+                    new List<(IntCo2 start, IntCo2 end)>();
                 segments.Add(wire);
 
                 int x = 0, y = 0;
@@ -39,7 +39,7 @@ namespace AdventOfCode.Solutions
 
                     int l = int.Parse(move[1..]);
                     int ex = x + dx * l, ey = y + dy * l;
-                    wire.Add(((x, y), (ex, ey)));
+                    wire.Add((new (x, y), (ex, ey)));
                     x = ex;
                     y = ey;
                 }
@@ -49,25 +49,25 @@ namespace AdventOfCode.Solutions
             foreach (var a in segments[0])
             foreach (var b in segments[1])
             {
-                if (a.start.x == a.end.x && b.start.x == b.end.x)
+                if (a.start.X == a.end.X && b.start.X == b.end.X)
                 {
                     // both vertical
                     continue;
                 }
 
-                if (a.start.y == a.end.y && b.start.y == b.end.y)
+                if (a.start.Y == a.end.Y && b.start.Y == b.end.Y)
                 {
                     // both horizontal
                     continue;
                 }
 
-                var v = a.start.x == a.end.x ? a : b;
+                var v = a.start.X == a.end.X ? a : b;
                 var h = v == a ? b : a;
 
-                int horzLowX = Math.Min(h.start.x, h.end.x), horzHighX = Math.Max(h.start.x, h.end.x);
-                int vertLowY = Math.Min(v.start.y, v.end.y), vertHighY = Math.Max(v.start.y, v.end.y);
-                int vertX = v.start.x;
-                int horzY = h.start.y;
+                int horzLowX = Math.Min(h.start.X, h.end.X), horzHighX = Math.Max(h.start.X, h.end.X);
+                int vertLowY = Math.Min(v.start.Y, v.end.Y), vertHighY = Math.Max(v.start.Y, v.end.Y);
+                int vertX = v.start.X;
+                int horzY = h.start.Y;
                 if (vertX < horzLowX || vertX > horzHighX)
                 {
                     // the vertical one is left or right of the horizontal one
@@ -95,12 +95,12 @@ namespace AdventOfCode.Solutions
         public static async Task Problem2()
         {
             var data = await Data.GetDataLines();
-            List<List<((int x, int y) start, (int x, int y) end)>> segments =
-                new List<List<((int x, int y) start, (int x, int y) end)>>();
+            List<List<(IntCo2 start, IntCo2 end)>> segments =
+                new List<List<(IntCo2 start, IntCo2 end)>>();
             foreach (string line in data)
             {
-                List<((int x, int y) start, (int x, int y) end)> wire =
-                    new List<((int x, int y) start, (int x, int y) end)>();
+                List<(IntCo2 start, IntCo2 end)> wire =
+                    new List<(IntCo2 start, IntCo2 end)>();
                 segments.Add(wire);
 
                 int x = 0, y = 0;
@@ -125,7 +125,7 @@ namespace AdventOfCode.Solutions
 
                     int l = int.Parse(move[1..]);
                     int ex = x + dx * l, ey = y + dy * l;
-                    wire.Add(((x, y), (ex, ey)));
+                    wire.Add((new (x, y), (ex, ey)));
                     x = ex;
                     y = ey;
                 }
@@ -136,29 +136,29 @@ namespace AdventOfCode.Solutions
             foreach (var a in segments[0])
             {
                 int lb = 0;
-                la += Math.Abs(a.end.x - a.start.x) + Math.Abs(a.end.y - a.start.y);
+                la += Math.Abs(a.end.X - a.start.X) + Math.Abs(a.end.Y - a.start.Y);
                 foreach (var b in segments[1])
                 {
-                    lb += Math.Abs(b.end.x - b.start.x) + Math.Abs(b.end.y - b.start.y);
-                    if (a.start.x == a.end.x && b.start.x == b.end.x)
+                    lb += Math.Abs(b.end.X - b.start.X) + Math.Abs(b.end.Y - b.start.Y);
+                    if (a.start.X == a.end.X && b.start.X == b.end.X)
                     {
                         // both vertical
                         continue;
                     }
 
-                    if (a.start.y == a.end.y && b.start.y == b.end.y)
+                    if (a.start.Y == a.end.Y && b.start.Y == b.end.Y)
                     {
                         // both horizontal
                         continue;
                     }
 
-                    var v = a.start.x == a.end.x ? a : b;
+                    var v = a.start.X == a.end.X ? a : b;
                     var h = v == a ? b : a;
 
-                    int horzLowX = Math.Min(h.start.x, h.end.x), horzHighX = Math.Max(h.start.x, h.end.x);
-                    int vertLowY = Math.Min(v.start.y, v.end.y), vertHighY = Math.Max(v.start.y, v.end.y);
-                    int vertX = v.start.x;
-                    int horzY = h.start.y;
+                    int horzLowX = Math.Min(h.start.X, h.end.X), horzHighX = Math.Max(h.start.X, h.end.X);
+                    int vertLowY = Math.Min(v.start.Y, v.end.Y), vertHighY = Math.Max(v.start.Y, v.end.Y);
+                    int vertX = v.start.X;
+                    int horzY = h.start.Y;
                     if (vertX < horzLowX || vertX > horzHighX)
                     {
                         // the vertical one is left or right of the horizontal one
@@ -178,7 +178,7 @@ namespace AdventOfCode.Solutions
                     }
 
                     // We didn't use this part of the wire
-                    int saved = Math.Abs(h.end.x - vertX) + Math.Abs(v.end.y - horzY);
+                    int saved = Math.Abs(h.end.X - vertX) + Math.Abs(v.end.Y - horzY);
                     distance = Math.Min(distance, la + lb - saved);
                 }
             }

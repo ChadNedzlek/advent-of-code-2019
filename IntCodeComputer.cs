@@ -58,8 +58,8 @@ namespace AdventOfCode
 
         public Task<long[]> RunProgramAsync(out ChannelWriter<long> input, out ChannelReader<long> output)
         {
-            var i = Channel.CreateBounded<long>(1);
-            var o = Channel.CreateBounded<long>(2);
+            var i = Channel.CreateUnbounded<long>();
+            var o = Channel.CreateUnbounded<long>();
             var t = RunProgramAsync(i.Reader, o.Writer);
             input = i.Writer;
             output = o.Reader;

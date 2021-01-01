@@ -12,6 +12,12 @@ namespace AdventOfCode.Solutions
         }
         
         [Conditional("DEBUG")]
+        public static void WriteLine()
+        {
+            Console.WriteLine();
+        }
+        
+        [Conditional("DEBUG")]
         public static void SetCursorPosition(int left, int top)
         {
             Console.SetCursorPosition(left, top);

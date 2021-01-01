@@ -1,20 +1,95 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
-using System.Runtime.CompilerServices;
-using System.Security.Cryptography.X509Certificates;
-using System.Security.Principal;
 using System.Threading.Tasks;
 
 namespace AdventOfCode.Solutions
 {
     public class Day15
     {
+        public class TileMap : IMap<IntCo2, int>
+        {
+            public TileMap(Dictionary<IntCo2, Tile> map)
+            {
+                _map = map;
+            }
+
+            private readonly Dictionary<IntCo2, Tile> _map;
+            public Tile this[IntCo2 key]
+            {
+                get => _map[key];
+                set => _map[key] = value;
+            }
+
+            public bool IsPassable(IntCo2 loc, int ignoredState)
+            {
+                Rectangle rect = GetBounds();
+                if (loc.X < rect.Left || loc.X > rect.Right || loc.Y < rect.Top || loc.Y > rect.Bottom)
+                    return false;
+
+                return !_map.TryGetValue((loc.X, loc.Y), out var t) || t != Tile.Wall;
+            }
+
+            private Rectangle? _cachedBounds = null;
+            public Rectangle GetBounds()
+            {
+                if (!_cachedBounds.HasValue)
+                {
+                    var reachableMap = _map.Where(p => p.Value != Tile.Unreachable).ToList();
+                    _cachedBounds = new Rectangle(
+                        top: reachableMap.Min(k => k.Key.Y) - 1,
+                        bottom: reachableMap.Max(k => k.Key.Y) + 1,
+                        left: reachableMap.Min(k => k.Key.X) - 1,
+                        right: reachableMap.Max(k => k.Key.X) + 1
+                    );
+                }
+
+                return _cachedBounds.Value;
+            }
+
+            public IEnumerable<IntCo2> GetNeighbors(IntCo2 location)
+            {
+                return new IntCo2[]
+                {
+                    new(location.X - 1, location.Y),
+                    new(location.X + 1, location.Y),
+                    new(location.X, location.Y - 1),
+                    new(location.X, location.Y + 1),
+                };
+            }
+
+            public int EstimateDistance(IntCo2 a, IntCo2 b)
+            {
+                return Math.Abs(a.X - b.X) + Math.Abs(a.Y - b.Y);
+            }
+
+            public void CalculateStep(IntCo2 from, IntCo2 to, int currentState, out int cost, out int newState)
+            {
+                cost = EstimateDistance(from, to);
+                newState = 0;
+            }
+
+            public bool IsAt(IntCo2 loc, IntCo2 target)
+            {
+                return loc == target;
+            }
+
+            public bool TryGetValue(IntCo2 loc, out Tile tile) => _map.TryGetValue(loc, out tile);
+
+            public void Add(IntCo2 location, Tile tile)
+            {
+                _map.Add(location, tile);
+                _cachedBounds = null;
+            }
+        }
+
         public static async Task Problem1()
         {
+            Stopwatch s = Stopwatch.StartNew();
             var data = await Data.GetDataLines();
-            Dictionary<(int x, int y), Tile> map = new Dictionary<(int x, int y), Tile>();
-            map.Add((0,0), Tile.Empty);
+            Dictionary<IntCo2, Tile> tiles = new Dictionary<IntCo2, Tile>();
+            tiles.Add((0,0), Tile.Empty);
             IntCodeComputer computer = new IntCodeComputer(data[0].Split(',').Select(long.Parse));
             var run = computer.RunProgramAsync(out var input, out var output);
             // Start going north so we have something to work with
@@ -24,51 +99,7 @@ namespace AdventOfCode.Solutions
             int minX = 0, minY = 0, maxX = 0, maxY = 0;
             D.Write('D');
             Queue<int> currentPath = new Queue<int>();
-
-            void DrawMap()
-            {
-                D.SetCursorPosition(0, 0);
-                for (int ry = minY; ry <= maxY; ry++)
-                {
-                    for (int rx = minX; rx <= maxX; rx++)
-                    {
-                        if (map.TryGetValue((rx, ry), out Tile tile))
-                        {
-                            switch (tile)
-                            {
-                                case Tile.Wall:
-                                    D.Write('\u2588');
-                                    break;
-                                case Tile.Empty:
-                                    if (rx == x && ry == y)
-                                    {
-                                        D.Write('D');
-                                    }
-                                    else
-                                    {
-                                        D.Write(' ');
-                                    }
-
-                                    break;
-                                case Tile.Oxygen:
-                                    D.Write('O');
-                                    break;
-                                case Tile.Unreachable:
-                                    D.Write('-');
-                                    break;
-                                default:
-                                    throw new ArgumentOutOfRangeException();
-                            }
-                        }
-                        else
-                        {
-                            D.Write('?');
-                        }
-                    }
-
-                    D.WriteLine("");
-                }
-            }
+            TileMap map = new TileMap(tiles);
 
             while (true)
             {
@@ -112,7 +143,7 @@ namespace AdventOfCode.Solutions
 
                 readOutput = output.ReadAsync().AsTask();
 
-                DrawMap();
+                DrawMap(minY, maxY, minX, maxX, map, x, y);
 
                 if (currentPath == null || currentPath.Count == 0)
                 {
@@ -140,37 +171,82 @@ namespace AdventOfCode.Solutions
                 }
             }
 
-            DrawMap();
+            DrawMap(minY, maxY, minX, maxX, map, x, y);
 
-            (int x, int y) oxygenLocation = map.First(m => m.Value == Tile.Oxygen).Key;
-            var find = CalculateNewPath(map, (minX, maxX, minY, maxY), (0,0), oxygenLocation, int.MaxValue);
+            IntCo2 oxygenLocation = tiles.First(m => m.Value == Tile.Oxygen).Key;
+            var find = AStar.CalculateNewPath(map, (0,0), oxygenLocation);
             Console.WriteLine();
             Console.WriteLine($"Shorted possible path is {find.Count} long");
 
             int furthest = 0;
-            foreach (var (loc, tile) in map)
+            foreach (var (loc, tile) in tiles)
             {
                 if (tile == Tile.Empty)
                 {
-                    var path = CalculateNewPath(map, (minX, maxX, minY, maxY), oxygenLocation, loc, int.MaxValue);
+                    var path = AStar.CalculateNewPath(map, oxygenLocation, loc);
                     furthest = Math.Max(furthest, path.Count);
                 }
             }
             Console.WriteLine();
             Console.WriteLine($"It will take Oxygen {furthest} minutes to spread");
+            s.Stop();
+            Console.WriteLine();
+            Console.WriteLine($"Solved in {s.Elapsed}");
         }
 
-        private static Queue<int> CalculateNewPath(Dictionary<(int x, int y), Tile> map, (int x, int y) droidLocation)
+        [Conditional("DEBUG")]
+        private static void DrawMap(int minY, int maxY, int minX, int maxX, TileMap map, int x, int y)
         {
-            var reachableMap = map.Where(p => p.Value != Tile.Unreachable).ToList();
-            int minX = reachableMap.Min(k => k.Key.x) - 1;
-            int maxX = reachableMap.Max(k => k.Key.x) + 1;
-            int minY = reachableMap.Min(k => k.Key.y) - 1;
-            int maxY = reachableMap.Max(k => k.Key.y) + 1;
+            D.SetCursorPosition(0, 0);
+            for (int ry = minY; ry <= maxY; ry++)
+            {
+                for (int rx = minX; rx <= maxX; rx++)
+                {
+                    if (map.TryGetValue((rx, ry), out Tile tile))
+                    {
+                        switch (tile)
+                        {
+                            case Tile.Wall:
+                                D.Write('\u2588');
+                                break;
+                            case Tile.Empty:
+                                if (rx == x && ry == y)
+                                {
+                                    D.Write('D');
+                                }
+                                else
+                                {
+                                    D.Write(' ');
+                                }
+
+                                break;
+                            case Tile.Oxygen:
+                                D.Write('O');
+                                break;
+                            case Tile.Unreachable:
+                                D.Write('-');
+                                break;
+                            default:
+                                throw new ArgumentOutOfRangeException();
+                        }
+                    }
+                    else
+                    {
+                        D.Write('?');
+                    }
+                }
+
+                D.WriteLine("");
+            }
+        }
+
+        private static Queue<int> CalculateNewPath(TileMap map, IntCo2 droidLocation)
+        {
             Queue<int> shortPath = null;
+            var bounds = map.GetBounds();
             
-            int spanX = Math.Max(maxX - droidLocation.x, droidLocation.x - minX);
-            int spanY = Math.Max(maxY - droidLocation.y, droidLocation.y - minY);
+            int spanX = Math.Max(bounds.Right - droidLocation.X, droidLocation.X - bounds.Left);
+            int spanY = Math.Max(bounds.Bottom - droidLocation.Y, droidLocation.Y - bounds.Top);
 
             for (int dy = 1; dy <= spanY; dy++)
             {
@@ -178,24 +254,39 @@ namespace AdventOfCode.Solutions
                 {
                     Queue<int> SearchLocation(int x, int y)
                     {
-                        if (x < minX || x > maxX || y < minY || y > maxY)
+                        if (x < bounds.Left || x > bounds.Right || y < bounds.Top || y > bounds.Bottom)
                             return shortPath;
 
-                        if (!map.ContainsKey((x, y)))
+                        if (!map.TryGetValue((x, y), out _))
                         {
                             // A square we haven't filled in!
-                            var path = CalculateNewPath(
+                            List<IntCo2> path = AStar.CalculateNewPath(
                                 map,
-                                (minX, maxX, minY, maxY),
                                 droidLocation,
                                 (x, y),
-                                shortPath?.Count ?? int.MaxValue
+                                lengthLimit: shortPath?.Count ?? int.MaxValue
                             );
+
                             if (path != null)
                             {
+                                Queue<int> steps = new Queue<int>(path.Count - 1);
+                                for (int i = 1; i < path.Count; i++)
+                                {
+                                    IntCo2 from = path[i-1];
+                                    IntCo2 to = path[i];
+                                    if (to.Y == from.Y - 1)
+                                        steps.Enqueue(DroidInput.North);
+                                    else if (to.Y == from.Y + 1)
+                                        steps.Enqueue(DroidInput.Sourth);
+                                    else if (to.X == from.X + 1)
+                                        steps.Enqueue(DroidInput.East);
+                                    else
+                                        steps.Enqueue(DroidInput.West);
+                                }
+
                                 if (shortPath == null || shortPath.Count > path.Count)
                                 {
-                                    shortPath = path;
+                                    shortPath = steps;
                                 }
                             }
                             else if (shortPath == null)
@@ -207,146 +298,15 @@ namespace AdventOfCode.Solutions
                         return shortPath;
                     }
                     
-                    shortPath = SearchLocation(droidLocation.x - dx, droidLocation.y - dy);
-                    shortPath = SearchLocation(droidLocation.x - dx, droidLocation.y + dy);
-                    shortPath = SearchLocation(droidLocation.x + dx, droidLocation.y - dy);
-                    shortPath = SearchLocation(droidLocation.x + dx, droidLocation.y + dy);
+                    shortPath = SearchLocation(droidLocation.X - dx, droidLocation.Y - dy);
+                    shortPath = SearchLocation(droidLocation.X - dx, droidLocation.Y + dy);
+                    shortPath = SearchLocation(droidLocation.X + dx, droidLocation.Y - dy);
+                    shortPath = SearchLocation(droidLocation.X + dx, droidLocation.Y + dy);
                 }
             }
 
             // No reachable points
             return shortPath;
-        }
-
-        private static Queue<int> CalculateNewPath(
-            Dictionary<(int x, int y), Tile> map,
-            (int left, int right, int top, int bottom) bounds,
-            (int x, int y) start,
-            (int x, int y) target,
-            int lengthLimit)
-        {
-            List<SearchNode> open = new List<SearchNode> {new(start)};
-            List<SearchNode> closed = new List<SearchNode>();
-            while (open.Count != 0)
-            {
-                var searchNode = open.OrderBy(
-                        n => n.Length + Math.Abs(target.x - n.Location.x) + Math.Abs(target.y - n.Location.y)
-                    )
-                    .First();
-                
-                open.Remove(searchNode);
-                closed.Add(searchNode);
-
-                if (searchNode.Length >= lengthLimit)
-                {
-                    continue;
-                }
-
-                SearchNode TrySearch((int x, int y) loc)
-                {
-                    if (loc.x < bounds.left)
-                        return null;
-                    if (loc.x > bounds.right)
-                        return null;
-                    if (loc.y < bounds.top)
-                        return null;
-                    if (loc.y > bounds.bottom)
-                        return null;
-
-                    if (map.TryGetValue(loc, out var tile) && tile == Tile.Wall)
-                        return null;
-
-                    if (loc == target)
-                    {
-                        return new SearchNode(target) {BestParent = searchNode};
-                    }
-
-                    var o = open.FirstOrDefault(o => o.Location == loc);
-                    var c = closed.FirstOrDefault(o => o.Location == loc);
-
-                    if (o != null)
-                    {
-                        // We already have an open node
-                        if (o.Length > searchNode.Length + 1)
-                        {
-                            // Our path is better, so update it, but leave it open
-                            o.BestParent = searchNode;
-                        }
-                    }
-                    else if (c != null)
-                    {
-                        // We've already "closed" this node
-                        if (c.Length > searchNode.Length + 1)
-                        {
-                            // But we found a better path!
-                            c.BestParent = searchNode;
-                            closed.Remove(c);
-                            open.Add(c);
-                        }
-                    }
-                    else
-                    {
-                        // First time we've been here, add a new guy
-                        open.Add(new SearchNode(loc) {BestParent = searchNode});
-                    }
-
-                    return null;
-                }
-
-                var neighborLocations = new (int x, int y)[]
-                {
-                    (searchNode.Location.x - 1, searchNode.Location.y),
-                    (searchNode.Location.x + 1, searchNode.Location.y),
-                    (searchNode.Location.x, searchNode.Location.y - 1),
-                    (searchNode.Location.x, searchNode.Location.y + 1),
-                };
-
-                foreach (var n in neighborLocations)
-                {
-                    var foundTarget = TrySearch(n);
-
-                    if (foundTarget != null)
-                    {
-                        List<(int x, int y)> reversePath = new List<(int x, int y)>();
-                        while (foundTarget != null)
-                        {
-                            reversePath.Add(foundTarget.Location);
-                            foundTarget = foundTarget.BestParent;
-                        }
-
-                        Queue<int> steps = new Queue<int>(reversePath.Count - 1);
-                        for (int i = reversePath.Count - 1; i > 0; i--)
-                        {
-                            (int x, int y) from = reversePath[i];
-                            (int x, int y) to = reversePath[i-1];
-                            if (to.y == from.y - 1)
-                                steps.Enqueue(DroidInput.North);
-                            else if (to.y == from.y + 1)
-                                steps.Enqueue(DroidInput.Sourth);
-                            else if (to.x == from.x + 1)
-                                steps.Enqueue(DroidInput.East);
-                            else
-                                steps.Enqueue(DroidInput.West);
-                        }
-
-                        return steps;
-                    }
-                }
-            }
-
-            return null;
-        }
-
-        public class SearchNode
-        {
-            public SearchNode((int x, int y) location)
-            {
-                Location = location;
-            }
-
-            public (int x, int y) Location { get; }
-            public SearchNode BestParent { get; set; }
-            public int Length => BestParent?.Length + 1 ?? 0;
         }
 
         public enum Tile
